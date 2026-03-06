@@ -1,13 +1,13 @@
 {
-  "_comment": "Add this to your Claude Desktop config file at ~/Library/Application Support/Claude/claude_desktop_config.json",
+  "_comment": "Add this to your AI agent config to enable MCP servers. Replace the example with your actual server configuration.",
   "mcpServers": {
     "faostat": {
       "command": "python",
       "args": ["-m", "faostat_mcp.server"],
-      "cwd": "/Users/griffithsobli-laryea/Documents/FS_API_usecase/faostat-mcp",
+      "cwd": "path/to/faostat-mcp",
       "env": {
         "FAOSTAT_API_TOKEN": "your_token_here",
-        "FAOSTAT_BASE_URL": "https://api-faostat.dev.fao.org/api/v1",
+        "FAOSTAT_BASE_URL": "https://faostatservices.fao.org/api/v1",
         "FAOSTAT_DEFAULT_LANG": "en"
       }
     }
