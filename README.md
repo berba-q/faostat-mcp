@@ -2,6 +2,7 @@
 
 > Query UN food and agriculture statistics with AI — powered by the [Model Context Protocol](https://modelcontextprotocol.io)
 
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/berba-q/faostat-mcp/releases)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -65,7 +66,7 @@ The [Model Context Protocol](https://modelcontextprotocol.io) is an open standar
 ### Install
 
 ```bash
-git clone https://github.com/your-username/faostat-mcp.git
+git clone https://github.com/berba-q/faostat-mcp.git
 cd faostat-mcp
 pip install -e .
 ```
@@ -258,6 +259,17 @@ faostat_get_data('QCL', area='2', item='515', element='2510', year='2024')
 - [Claude Desktop](https://claude.ai/download) — one of the AI assistants this server works with
 - [Cursor](https://www.cursor.com) — AI code editor with MCP support
 - [Windsurf](https://windsurf.com) — AI IDE with MCP support
+
+---
+
+## Changelog
+
+### v0.1.0 — Initial release
+
+- 18 MCP tools covering the full FAOSTAT API surface
+- Rate-limited HTTP client (2 req/s) with auto-retry
+- Compatible with Claude Desktop, Cursor, Windsurf, Zed, and any MCP stdio client
+- FastMCP-based server with rich tool descriptions for automatic AI tool selection
 
 ---
 
