@@ -1,0 +1,15 @@
+{
+  "_comment": "Add this to your Claude Desktop config file at ~/Library/Application Support/Claude/claude_desktop_config.json",
+  "mcpServers": {
+    "faostat": {
+      "command": "python",
+      "args": ["-m", "faostat_mcp.server"],
+      "cwd": "/Users/griffithsobli-laryea/Documents/FS_API_usecase/faostat-mcp",
+      "env": {
+        "FAOSTAT_API_TOKEN": "your_token_here",
+        "FAOSTAT_BASE_URL": "https://api-faostat.dev.fao.org/api/v1",
+        "FAOSTAT_DEFAULT_LANG": "en"
+      }
+    }
+  }
+}
