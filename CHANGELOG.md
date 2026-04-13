@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Releases from v1.1.0 onwards are generated automatically from [conventional commits](https://www.conventionalcommits.org) by [release-please](https://github.com/googleapis/release-please).
 
+## [1.2.3](https://github.com/berba-q/faostat-mcp/compare/v1.2.2...v1.2.3) (2026-04-13)
+
+
+### Documentation
+
+* add MCP Registry badge, listing link, and shorten server.json description ([cba8a86](https://github.com/berba-q/faostat-mcp/commit/cba8a86b40031bc22b094ea5f7630bf15f23779c))
+
 ## [1.2.2](https://github.com/berba-q/faostat-mcp/compare/v1.2.1...v1.2.2) (2026-04-13)
 
 
