@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Releases from v1.1.0 onwards are generated automatically from [conventional commits](https://www.conventionalcommits.org) by [release-please](https://github.com/googleapis/release-please).
 
+## [1.3.0](https://github.com/berba-q/faostat-mcp/compare/v1.2.2...v1.3.0) (2026-10-02)
+
+
+### Features
+
+* enhance error handling and token management in FAOSTAT client ([8bd3351](https://github.com/berba-q/faostat-mcp/commit/8bd33515ca859ab0b25ebaf78f1bbf87e6359765))
+
+
+### Bug Fixes
+
+* implement CI workflow and enhance release process with testing and dependency management ([bc749d3](https://github.com/berba-q/faostat-mcp/commit/bc749d37a7f104e715661261eb933d288b416dca))
+
 ## [1.2.2](https://github.com/berba-q/faostat-mcp/compare/v1.2.1...v1.2.2) (2026-04-13)
 
 
