@@ -134,3 +134,11 @@ dmypy.json
 .claude/settings.local.json
 .codex/mcp.json
 .cursor/mcp.json
+
+# Local-only: registry tokens, generated outputs, scratch, ad-hoc scripts, planning docs
+.mcpregistry_*
+/output/
+/outputs/
+/tmp/
+/scripts/
+/docs/

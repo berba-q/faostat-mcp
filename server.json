@@ -2,7 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.berba-q/faostat-mcp",
   "title": "FAOSTAT MCP",
-  "description": "FAOSTAT data for 245 countries: crops, trade, food security, and emissions via 21 MCP tools.",
+  "description": "FAOSTAT data for 245 countries: crops, trade, food security, and emissions via 23 MCP tools.",
+  "websiteUrl": "https://github.com/berba-q/faostat-mcp#readme",
   "repository": {
     "url": "https://github.com/berba-q/faostat-mcp",
     "source": "github"
@@ -13,32 +14,41 @@
       "registryType": "pypi",
       "identifier": "faostat-mcp",
       "version": "1.2.2",
+      "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
           "name": "FAOSTAT_API_TOKEN",
-          "description": "FAOSTAT JWT access token. Obtain from the FAOSTAT Developer Portal. Optional if FAOSTAT_USERNAME and FAOSTAT_PASSWORD are provided.",
+          "description": "Optional. A FAOSTAT access token from the Developer Portal. Tokens expire after 1 hour, so prefer FAOSTAT_USERNAME + FAOSTAT_PASSWORD, which refresh automatically.",
           "isRequired": false,
           "isSecret": true,
           "format": "string"
         },
         {
           "name": "FAOSTAT_USERNAME",
-          "description": "FAOSTAT account email. Used with FAOSTAT_PASSWORD for automatic token refresh. Optional if FAOSTAT_API_TOKEN is provided.",
-          "isRequired": false,
+          "description": "FAOSTAT account email (free account at https://www.fao.org/faostat/en/#developer-portal). Used to obtain and refresh tokens automatically.",
+          "isRequired": true,
           "isSecret": false,
           "format": "string"
         },
         {
           "name": "FAOSTAT_PASSWORD",
-          "description": "FAOSTAT account password. Used with FAOSTAT_USERNAME for token refresh.",
-          "isRequired": false,
+          "description": "FAOSTAT account password. Used with FAOSTAT_USERNAME to obtain and refresh tokens automatically.",
+          "isRequired": true,
           "isSecret": true,
           "format": "string"
         }
       ]
     }
-  ]
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "tags": [
+        "agriculture", "food-security", "statistics", "fao", "faostat",
+        "food", "trade", "emissions", "climate", "nutrition", "open-data", "un"
+      ]
+    }
+  }
 }

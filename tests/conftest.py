@@ -18,6 +18,12 @@ from faostat_mcp.client import DiskCache, HybridCaching
 
 
 @pytest.fixture(autouse=True)
+def no_update_check(monkeypatch):
+    """Keep unit tests off the network: the PyPI update check is opt-in per test."""
+    monkeypatch.setenv("FAOSTAT_NO_UPDATE_CHECK", "1")
+
+
+@pytest.fixture(autouse=True)
 def reset_cache_between_tests(tmp_path):
     """Ensure each test starts with a clean in-memory and disk cache."""
     # 1. Reset in-memory class-level state

@@ -48,6 +48,21 @@ jobs:
       - name: Build distribution
         run: python -m build
 
+      # Install the wheel with its declared dependency ranges, exactly as users
+      # get it, and run the unit tests before anything reaches PyPI.
+      - name: Test built wheel
+        run: |
+          pip install dist/*.whl pytest pytest-asyncio respx
+          mkdir -p "$RUNNER_TEMP/wheel-tests"
+          cp tests/conftest.py tests/test_unit.py "$RUNNER_TEMP/wheel-tests/"
+          cd "$RUNNER_TEMP/wheel-tests"
+          python -m pytest -o asyncio_mode=auto test_unit.py -q
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Fresh-install launch (stdio handshake via uvx)
+        run: python tests/smoke_install.py uvx --from dist/*.whl faostat-mcp
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         # No API token needed — uses OIDC Trusted Publishing.
@@ -57,3 +72,20 @@ jobs:
         #   Repository:        faostat-mcp
         #   Workflow filename: release-please.yml   <- note: changed from publish.yml
         #   Environment:       pypi
+
+      # MCP Registry: io.github.berba-q/* authenticates via GitHub OIDC (no secret).
+      # server.json versions are bumped by release-please (extra-files).
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Publish to MCP Registry
+        run: |
+          ./mcp-publisher login github-oidc
+          # The registry verifies the package on PyPI, which can lag a fresh upload.
+          for attempt in 1 2 3 4 5; do
+            ./mcp-publisher publish && exit 0
+            echo "Registry publish attempt $attempt failed; retrying in 30s"
+            sleep 30
+          done
+          exit 1

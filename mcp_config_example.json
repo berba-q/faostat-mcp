@@ -6,7 +6,8 @@
       "command": "uvx",
       "args": ["faostat-mcp"],
       "env": {
-        "FAOSTAT_API_TOKEN": "your_token_here",
+        "FAOSTAT_USERNAME": "your_email",
+        "FAOSTAT_PASSWORD": "your_password",
         "FAOSTAT_BASE_URL": "https://faostatservices.fao.org/api/v1",
         "FAOSTAT_DEFAULT_LANG": "en"
       }
@@ -17,7 +18,8 @@
       "args": ["-m", "faostat_mcp.server"],
       "cwd": "/path/to/faostat-mcp",
       "env": {
-        "FAOSTAT_API_TOKEN": "your_token_here",
+        "FAOSTAT_USERNAME": "your_email",
+        "FAOSTAT_PASSWORD": "your_password",
         "FAOSTAT_BASE_URL": "https://faostatservices.fao.org/api/v1",
         "FAOSTAT_DEFAULT_LANG": "en"
       }

@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build --wheel
+
+      # Install the wheel with its declared dependency ranges, as users get it.
+      - name: Unit tests against built wheel
+        run: |
+          pip install dist/*.whl pytest pytest-asyncio respx
+          mkdir -p "$RUNNER_TEMP/wheel-tests"
+          cp tests/conftest.py tests/test_unit.py "$RUNNER_TEMP/wheel-tests/"
+          cd "$RUNNER_TEMP/wheel-tests"
+          python -m pytest -o asyncio_mode=auto test_unit.py -q
+
+      - name: Fresh-install launch (stdio handshake via uvx)
+        run: python tests/smoke_install.py uvx --python ${{ matrix.python-version }} --from dist/*.whl faostat-mcp

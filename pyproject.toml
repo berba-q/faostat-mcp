@@ -31,14 +31,17 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 requires-python = ">=3.10"
+# Upper bounds are the next untested major. uvx/pip resolve fresh on every
+# install, so an unbounded dep breaks existing releases (mcp 2.x removed
+# mcp.server.fastmcp). FastMCP first shipped in mcp 1.2.0.
 dependencies = [
-    "mcp[cli]>=1.0",
-    "httpx>=0.27",
-    "pydantic>=2.0",
-    "python-dotenv>=1.0",
-    "tenacity>=8.2",
-    "redis>=7.3.0",
-    "hiredis>=3.3.1",
+    "mcp[cli]>=1.2.0,<2",
+    "httpx>=0.27,<1",
+    "pydantic>=2.0,<3",
+    "python-dotenv>=1.0,<2",
+    "tenacity>=8.2,<10",
+    "redis>=7.3.0,<9",
+    "hiredis>=3.3.1,<4",
 ]
 
 [project.urls]
