@@ -555,7 +555,8 @@ def _raise_for_status(response: httpx.Response) -> None:
     if response.status_code == 403:
         raise FAOSTATAuthError(
             f"403 Forbidden — authentication failed.{detail} "
-            "If your token expired, log in again at the developer portal and update .env."
+            "The token was rejected (expired or revoked). Set FAOSTAT_USERNAME and "
+            "FAOSTAT_PASSWORD (or run faostat_setup) to enable automatic refresh."
         )
     if response.status_code == 429:
         raise FAOSTATRateLimitError(f"429 Rate limit exceeded.{detail}")
@@ -591,9 +592,10 @@ async def faostat_get(path: str, params: dict[str, Any] | None = None) -> Any:
         timeout=60.0,
     ) as client:
         response = await client.get(path, params=params)
-        # Auto-refresh on 401 and retry once
-        if response.status_code == 401 and tm.has_credentials:
-            logger.info("Got 401 — refreshing token and retrying …")
+        # Auto-refresh on 401/403 and retry once. The API answers 403
+        # "Authentication Failed" for a revoked token that is not yet expired.
+        if response.status_code in (401, 403) and tm.has_credentials:
+            logger.info("Got %s — refreshing token and retrying …", response.status_code)
             await tm.force_refresh()
             response = await client.get(
                 path, params=params, headers=await get_headers(),
@@ -625,9 +627,10 @@ async def faostat_post(path: str, json: Any = None, params: dict[str, Any] | Non
         timeout=60.0,
     ) as client:
         response = await client.post(path, json=json, params=params)
-        # Auto-refresh on 401 and retry once
-        if response.status_code == 401 and tm.has_credentials:
-            logger.info("Got 401 — refreshing token and retrying …")
+        # Auto-refresh on 401/403 and retry once. The API answers 403
+        # "Authentication Failed" for a revoked token that is not yet expired.
+        if response.status_code in (401, 403) and tm.has_credentials:
+            logger.info("Got %s — refreshing token and retrying …", response.status_code)
             await tm.force_refresh()
             response = await client.post(
                 path, json=json, params=params, headers=await get_headers(),
