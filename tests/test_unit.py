@@ -27,6 +27,7 @@ from faostat_mcp.client import (
     HybridCaching,
     FAOSTATAuthError,
     FAOSTATRateLimitError,
+    FAOSTATServerError,
     TokenManager,
     _is_token_expired,
     _get_redis_connector,
@@ -36,6 +37,9 @@ from faostat_mcp.server import (
     _format_rows,
     faostat_get_codes,
     faostat_get_data,
+    faostat_get_datasize,
+    faostat_get_definition_type,
+    faostat_resolve_name,
     faostat_get_rankings,
     faostat_list_groups,
     faostat_ping,
@@ -79,6 +83,7 @@ _NEAR_EXPIRY_TOKEN = _make_jwt(int(time.time()) + 30)
 @pytest.fixture(autouse=True)
 def reset_singletons(monkeypatch):
     """Prevent state leaking between tests via module-level globals."""
+    monkeypatch.setattr(client_module, "_load_credentials_from_storage", lambda: ("", ""))
     monkeypatch.setattr(client_module, "_token_manager", None)
     monkeypatch.setattr(client_module, "_last_request_time", 0.0)
     monkeypatch.setenv("FAOSTAT_API_TOKEN", _VALID_TOKEN)
@@ -184,7 +189,7 @@ async def test_faostat_get_data_truncates_list_response():
     """List responses larger than limit are truncated with metadata."""
     big_list = [{"row": i} for i in range(600)]
     with patch("faostat_mcp.server.faostat_get", return_value=big_list):
-        result = json.loads(await faostat_get_data(domain_code="QCL", limit=500))
+        result = json.loads(await faostat_get_data(domain_code="QCL", limit=500, response_format="objects"))
     assert result["_truncated"] is True
     assert result["_total_rows"] == 600
     assert result["_returned_rows"] == 500
@@ -195,7 +200,7 @@ async def test_faostat_get_data_truncates_dict_with_data_key():
     """Dict responses with a 'data' list key are also truncated correctly."""
     big_response = {"data": [{"row": i} for i in range(600)], "metadata": {}}
     with patch("faostat_mcp.server.faostat_get", return_value=big_response):
-        result = json.loads(await faostat_get_data(domain_code="QCL", limit=500))
+        result = json.loads(await faostat_get_data(domain_code="QCL", limit=500, response_format="objects"))
     assert result["_truncated"] is True
     assert result["_returned_rows"] == 500
 
@@ -204,7 +209,7 @@ async def test_faostat_get_data_no_truncation_when_under_limit():
     """Responses under the limit are returned unchanged (no _truncated key)."""
     small_list = [{"row": i} for i in range(10)]
     with patch("faostat_mcp.server.faostat_get", return_value=small_list):
-        result = json.loads(await faostat_get_data(domain_code="QCL", limit=500))
+        result = json.loads(await faostat_get_data(domain_code="QCL", limit=500, response_format="objects"))
     assert isinstance(result, list)
     assert result == small_list
 
@@ -213,9 +218,248 @@ async def test_faostat_get_data_limit_zero_disables_truncation():
     """Setting limit=0 disables truncation entirely."""
     big_list = [{"row": i} for i in range(1000)]
     with patch("faostat_mcp.server.faostat_get", return_value=big_list):
-        result = json.loads(await faostat_get_data(domain_code="QCL", limit=0))
+        result = json.loads(await faostat_get_data(domain_code="QCL", limit=0, response_format="objects"))
     assert isinstance(result, list)
     assert len(result) == 1000
+
+
+# ---------------------------------------------------------------------------
+# faostat_get_definition_type — global definitions by type (no domain)
+# Shapes mirror the live API: /definitions/types and /definitions/types/{type}
+# ---------------------------------------------------------------------------
+
+_TYPES_RESPONSE = {"metadata": {}, "data": [
+    {"code": "areagroup", "label": "Country Group"},
+    {"code": "flag", "label": "Flags"},
+]}
+_AREAGROUP_RESPONSE = {"metadata": {}, "data": [
+    {"Country Group Code": "5100", "Country Group": "Africa", "Country Code": "114", "Country": "Kenya"},
+    {"Country Group Code": "5100", "Country Group": "Africa", "Country Code": "124", "Country": "Libya"},
+    {"Country Group Code": "5300", "Country Group": "Asia", "Country Code": "2", "Country": "Afghanistan"},
+]}
+
+
+def _fake_definitions_get(path, params=None):
+    if path.endswith("/definitions/types"):
+        return _TYPES_RESPONSE
+    if path.endswith("/definitions/types/areagroup"):
+        return _AREAGROUP_RESPONSE
+    raise AssertionError(f"unexpected path {path}")
+
+
+async def test_definition_type_unknown_type_lists_valid_types():
+    """An unknown type must not hit /definitions/types/{type} (the API 500s on it)."""
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_definitions_get):
+        result = json.loads(await faostat_get_definition_type("bogus", response_format="objects"))
+    assert result["error"] == "UnknownDefinitionType"
+    assert result["valid_types"] == ["areagroup", "flag"]
+
+
+async def test_definition_type_search_filters_rows_case_insensitively():
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_definitions_get):
+        result = json.loads(await faostat_get_definition_type("areagroup", search="AFRICA", response_format="objects"))
+    assert result["_total_rows"] == 2
+    assert [r["Country"] for r in result["data"]] == ["Kenya", "Libya"]
+    assert result["_truncated"] is False
+
+
+async def test_definition_type_limit_truncates_with_metadata():
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_definitions_get):
+        result = json.loads(await faostat_get_definition_type("areagroup", limit=1, response_format="objects"))
+    assert result["_truncated"] is True
+    assert result["_total_rows"] == 3
+    assert result["_returned_rows"] == 1
+    assert result["columns"] == ["Country Group Code", "Country Group", "Country Code", "Country"]
+
+
+async def test_definition_type_limit_zero_returns_all():
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_definitions_get):
+        result = json.loads(await faostat_get_definition_type("areagroup", limit=0, response_format="objects"))
+    assert result["_returned_rows"] == 3
+    assert result["_truncated"] is False
+
+
+# ---------------------------------------------------------------------------
+# FAO-defined names only — faostat_resolve_name and code validation
+# ---------------------------------------------------------------------------
+
+_DEFS = {
+    "areagroup": [
+        {"Country Group Code": "5100", "Country Group": "Africa", "Country": "Kenya"},
+        {"Country Group Code": "5100", "Country Group": "Africa", "Country": "Libya"},
+        {"Country Group Code": "5101", "Country Group": "Eastern Africa", "Country": "Kenya"},
+        {"Country Group Code": "5306", "Country Group": "Sub-Saharan Africa", "Country": "Kenya"},
+    ],
+    "area": [{"Country Code": "114", "Country": "Kenya"}],
+    "indicator": [{"Indicator Code": "21010", "Indicator": "Average dietary energy supply adequacy"}],
+    "element": [
+        {"Domain Code": "QCL", "Element Code": "5510", "Element": "Production"},
+        {"Domain Code": "QV", "Element Code": "5510", "Element": "Production"},
+    ],
+    "item": [{"Item Code": "15", "Item": "Wheat"}, {"Item Code": "16", "Item": "Flour, wheat"}],
+}
+_DEF_TYPES = {"data": [{"code": t, "label": t} for t in _DEFS]}
+_QCL_CODES = {
+    "area": {"data": [{"code": "114", "label": "Kenya"}, {"code": "5100>", "label": "Africa > (List)"}]},
+    "item": {"data": [{"code": "15", "label": "Wheat"}]},
+    "element": {"data": [{"code": "2510", "label": "Production"}]},
+}
+
+
+def _fake_get(path, params=None):
+    parts = path.strip("/").split("/")
+    if parts[1:] == ["definitions", "types"]:
+        return _DEF_TYPES
+    if parts[1:3] == ["definitions", "types"]:
+        return {"data": _DEFS[parts[3]]}
+    if parts[1] == "codes":
+        return _QCL_CODES[parts[2]]
+    if parts[1] == "data":
+        return [{"Value": 1}]
+    raise AssertionError(f"unexpected path {path}")
+
+
+async def test_resolve_region_exact_match_is_defined():
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_get):
+        r = json.loads(await faostat_resolve_name("region", "sub-saharan africa"))
+    assert r["status"] == "defined"
+    assert r["match"] == {"type": "areagroup", "definition_code": "5306", "label": "Sub-Saharan Africa"}
+
+
+async def test_resolve_region_partial_match_requires_confirmation():
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_get):
+        r = json.loads(await faostat_resolve_name("region", "africa east"))
+    # no substring hit -> not defined, but close suggestions offered
+    assert r["status"] == "no_matching_definition"
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_get):
+        r = json.loads(await faostat_resolve_name("region", "Africa"))
+    assert r["status"] == "defined"          # exact beats substring
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_get):
+        r = json.loads(await faostat_resolve_name("region", "east"))
+    assert r["status"] == "ambiguous" and r["requires_confirmation"] is True
+    assert [m["label"] for m in r["matches"]] == ["Eastern Africa"]
+
+
+async def test_resolve_invented_region_is_not_defined_by_fao():
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_get):
+        r = json.loads(await faostat_resolve_name("region", "Global South"))
+    assert r["status"] == "no_matching_definition"
+    assert r["requires_confirmation"] is True
+    assert "No matching FAOSTAT definition" in r["message"]
+
+
+async def test_resolve_indicator_searches_indicators_elements_items_deduped():
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_get):
+        r = json.loads(await faostat_resolve_name("indicator", "production"))
+    assert r["status"] == "defined"
+    assert r["match"] == {"type": "element", "definition_code": "5510", "label": "Production", "domains": ["QCL", "QV"]}
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_get):
+        r = json.loads(await faostat_resolve_name("indicator", "carbon happiness index"))
+    assert r["status"] == "no_matching_definition"
+
+
+async def test_resolve_unknown_kind_is_an_error():
+    r = json.loads(await faostat_resolve_name("planet", "Mars"))
+    assert r["error"] == "ValueError"
+
+
+async def test_get_data_rejects_codes_not_in_domain():
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_get):
+        r = json.loads(await faostat_get_data("QCL", area="114,9999", item="15", response_format="objects"))
+    assert r["error"] == "UnknownCode"
+    assert r["unknown"] == {"area": ["9999"]}
+
+
+async def test_get_data_accepts_fao_aggregate_codes():
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_get):
+        r = json.loads(await faostat_get_data("QCL", area="5100>", item="15", element="2510", response_format="objects"))
+    assert r == [{"Value": 1}]
+
+
+async def test_get_data_validation_fails_open_when_code_list_unavailable():
+    def flaky(path, params=None):
+        if "/codes/" in path:
+            raise FAOSTATServerError("boom")
+        return [{"Value": 1}]
+    with patch("faostat_mcp.server.faostat_get", side_effect=flaky):
+        r = json.loads(await faostat_get_data("QCL", area="114", response_format="objects"))
+    assert r == [{"Value": 1}]
+
+
+async def test_get_datasize_rejects_codes_not_in_domain():
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_get), \
+         patch("faostat_mcp.server.faostat_post") as post:
+        r = json.loads(await faostat_get_datasize("QCL", element="5510"))
+    assert r["error"] == "UnknownCode"
+    post.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Update notice — PyPI check, attached once to the first JSON-object result
+# ---------------------------------------------------------------------------
+
+_PYPI_URL = "https://pypi.org/pypi/faostat-mcp/json"
+
+
+@pytest.fixture
+def update_check(monkeypatch):
+    import faostat_mcp.server as server_module
+    monkeypatch.delenv("FAOSTAT_NO_UPDATE_CHECK", raising=False)
+    monkeypatch.setattr(server_module, "__version__", "1.2.2")
+    server_module._update = {"checked": False, "notice": None}
+    yield server_module
+
+
+@respx.mock
+async def test_update_notice_logged_once_when_newer_release(update_check, caplog):
+    respx.get(_PYPI_URL).mock(return_value=httpx.Response(200, json={"info": {"version": "1.3.0"}}))
+    with patch("faostat_mcp.server.faostat_get", return_value={"status": "ok"}):
+        first = json.loads(await faostat_ping())
+        second = json.loads(await faostat_ping())
+    assert "_update_notice" not in first
+    assert "1.3.0" in caplog.text
+    assert sum("1.3.0" in record.message for record in caplog.records) == 1
+    assert "_update_notice" not in second
+    assert respx.calls.call_count == 1
+
+
+@respx.mock
+async def test_update_notice_absent_when_current(update_check):
+    respx.get(_PYPI_URL).mock(return_value=httpx.Response(200, json={"info": {"version": "1.2.2"}}))
+    with patch("faostat_mcp.server.faostat_get", return_value={"status": "ok"}):
+        result = json.loads(await faostat_ping())
+    assert "_update_notice" not in result
+
+
+@respx.mock
+async def test_update_check_failure_is_silent(update_check):
+    respx.get(_PYPI_URL).mock(side_effect=httpx.ConnectError("offline"))
+    with patch("faostat_mcp.server.faostat_get", return_value={"status": "ok"}):
+        result = json.loads(await faostat_ping())
+    assert result == {"status": "ok"}
+
+
+@respx.mock
+async def test_update_notice_does_not_change_tool_results(update_check):
+    """Update checks preserve both list and object result shapes."""
+    respx.get(_PYPI_URL).mock(return_value=httpx.Response(200, json={"info": {"version": "2.0.0"}}))
+    with patch("faostat_mcp.server.faostat_get", return_value=[{"row": 1}]):
+        listed = json.loads(await faostat_get_data(domain_code="QCL", response_format="objects"))
+    with patch("faostat_mcp.server.faostat_get", return_value={"status": "ok"}):
+        pinged = json.loads(await faostat_ping())
+    assert listed == [{"row": 1}]
+    assert "_update_notice" not in pinged
+    assert "2.0.0" in update_check._update["notice"]
+
+
+@respx.mock
+async def test_update_check_opt_out(update_check, monkeypatch):
+    monkeypatch.setenv("FAOSTAT_NO_UPDATE_CHECK", "1")
+    route = respx.get(_PYPI_URL).mock(return_value=httpx.Response(200, json={"info": {"version": "9.0.0"}}))
+    with patch("faostat_mcp.server.faostat_get", return_value={"status": "ok"}):
+        result = json.loads(await faostat_ping())
+    assert "_update_notice" not in result
+    assert not route.called
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +596,55 @@ async def test_faostat_get_auto_refreshes_via_auth_endpoint_on_401():
     assert result == {"status": "ok"}
 
 
+@respx.mock
+async def test_faostat_get_auto_refreshes_on_403_revoked_token():
+    """The API returns 403 'Authentication Failed' for a revoked but unexpired token.
+
+    faostat_get() must refresh and retry, as it does for 401.
+    """
+    fresh_token = _make_jwt(int(time.time()) + 3600)
+    api_route = respx.get("https://faostatservices.fao.org/api/v1/ping")
+    api_route.side_effect = [
+        httpx.Response(403, text="Authentication Failed"),
+        httpx.Response(200, json={"status": "ok"}),
+    ]
+    login_route = respx.post(_AUTH_URL).mock(
+        return_value=httpx.Response(200, json=_make_auth_response(fresh_token))
+    )
+    client_module._token_manager = TokenManager(
+        base_url=_BASE_URL,
+        token=_VALID_TOKEN,
+        username="user@example.com",
+        password="secret",
+    )
+
+    result = await faostat_get("/ping")
+    assert result == {"status": "ok"}
+    assert login_route.call_count == 1
+
+
+@respx.mock
+async def test_faostat_get_raises_auth_error_on_403_after_refresh():
+    """A 403 that persists after one refresh raises FAOSTATAuthError (no loop)."""
+    fresh_token = _make_jwt(int(time.time()) + 3600)
+    api_route = respx.get("https://faostatservices.fao.org/api/v1/ping").mock(
+        return_value=httpx.Response(403, text="Authentication Failed")
+    )
+    respx.post(_AUTH_URL).mock(
+        return_value=httpx.Response(200, json=_make_auth_response(fresh_token))
+    )
+    client_module._token_manager = TokenManager(
+        base_url=_BASE_URL,
+        token=_VALID_TOKEN,
+        username="user@example.com",
+        password="secret",
+    )
+
+    with pytest.raises(FAOSTATAuthError):
+        await faostat_get("/ping")
+    assert api_route.call_count == 2
+
+
 # _format_rows helper — pure unit tests
 # ---------------------------------------------------------------------------
 
@@ -431,7 +724,7 @@ async def test_faostat_get_data_default_limit_is_50():
     """Default limit is now 50 (not 500)."""
     big_list = [{"Area": "X", "Value": i} for i in range(100)]
     with patch("faostat_mcp.server.faostat_get", return_value=big_list):
-        result = json.loads(await faostat_get_data(domain_code="QCL"))
+        result = json.loads(await faostat_get_data(domain_code="QCL", response_format="objects"))
     assert result["_truncated"] is True
     assert result["_returned_rows"] == 50
 
@@ -439,7 +732,7 @@ async def test_faostat_get_data_default_limit_is_50():
 async def test_faostat_get_data_show_codes_default_false():
     """show_codes defaults to False — verify param passed to API."""
     with patch("faostat_mcp.server.faostat_get", return_value=[]) as mock_get:
-        await faostat_get_data(domain_code="QCL")
+        await faostat_get_data(domain_code="QCL", response_format="objects")
     call_params = mock_get.call_args[1]["params"]
     assert call_params["show_codes"] is False
     assert call_params["show_flags"] is False
@@ -486,7 +779,7 @@ async def test_faostat_get_data_field_selection():
     with patch("faostat_mcp.server.faostat_get", return_value=rows):
         result = json.loads(await faostat_get_data(
             domain_code="QCL", fields="Area,Value"
-        ))
+        , response_format="objects"))
     assert list(result[0].keys()) == ["Area", "Value"]
 
 
@@ -544,7 +837,7 @@ async def test_faostat_get_codes_caches_result():
                     dimension_id="item", domain_code="QCL"
                 ))
     # Verify set_data was called with all 3 args: (tool_name, arg_dict, data)
-    assert mock_set.call_count == 1
+    assert mock_set.call_count == 2
     call_args = mock_set.call_args[0]
     assert len(call_args) == 3, (
         f"set_data called with {len(call_args)} args instead of 3 — "
@@ -1047,3 +1340,64 @@ async def test_faostat_setup_returns_error_on_bad_creds():
         ))
     assert result["status"] == "error"
     assert "Authentication failed" in result["message"]
+
+
+async def test_data_raw_cache_reused_across_formats_fields_and_limits():
+    rows = [{"Area": "Kenya", "Year": 2023, "Unit": "t", "Value": 42},
+            {"Area": "Kenya", "Year": 2024, "Unit": "t", "Value": 43}]
+    with patch("faostat_mcp.server.faostat_get", return_value=rows) as get:
+        default = json.loads(await faostat_get_data("QCL"))
+        selected = json.loads(await faostat_get_data("QCL", fields="Year,Value", limit=1))
+        objects = json.loads(await faostat_get_data("QCL", response_format="objects"))
+        csv = await faostat_get_data("QCL", response_format="csv")
+        assert csv == await faostat_get_data("QCL", response_format="csv")
+    assert get.call_count == 1
+    assert default["columns"] == ["Area", "Year", "Unit", "Value"]
+    assert selected["columns"] == ["Year", "Value"]
+    assert selected["rows"] == [[2023, 42]] and selected["_total_rows"] == 2
+    assert objects == rows
+    assert csv.startswith("Area,Year,Unit,Value\n")
+
+
+async def test_code_table_shared_across_search_browse_and_validation():
+    raw = {"metadata": {}, "data": [{"code": "114", "label": "Kenya"}]}
+    with patch("faostat_mcp.server.faostat_get", return_value=raw) as get:
+        match = json.loads(await faostat_search_codes("QCL", "area", "Kenya"))
+        listed = json.loads(await faostat_get_codes("area", "QCL"))
+        from faostat_mcp.server import _unknown_codes
+        assert await _unknown_codes("QCL", "en", area="114") is None
+    assert get.call_count == 1
+    assert match["match"]["code"] == "114" and listed == raw
+
+
+async def test_search_limits_and_blank_input():
+    rows = [{"code": str(i), "label": f"Crop {i}"} for i in range(30)]
+    with patch("faostat_mcp.server.faostat_get", return_value=rows) as get:
+        blank = json.loads(await faostat_search_codes("QCL", "item", " "))
+        get.assert_not_called()
+        result = json.loads(await faostat_search_codes("QCL", "item", "Crop"))
+    assert blank["error"] == "ValueError"
+    assert len(result["matches"]) == 25 and result["_total_matches"] == 30
+    assert result["_truncated"] and result["requires_confirmation"]
+
+
+async def test_definition_compact_default_and_case_insensitive_suggestions():
+    with patch("faostat_mcp.server.faostat_get", side_effect=_fake_get):
+        definitions = json.loads(await faostat_get_definition_type("areagroup", limit=1))
+        suggestion = json.loads(await faostat_resolve_name("region", "EASTRN AFRICA"))
+        blank = json.loads(await faostat_resolve_name("region", " "))
+    assert len(definitions["rows"]) == 1 and "data" not in definitions
+    assert definitions["_truncated"]
+    assert suggestion["status"] == "no_matching_definition"
+    assert any(row["label"] == "Eastern Africa" for row in suggestion["suggestions"])
+    assert blank["error"] == "ValueError"
+
+
+async def test_rankings_cache_preserves_requested_format():
+    rows = [{"Area": "Kenya", "Value": 42}]
+    with patch("faostat_mcp.server.faostat_post", return_value=rows) as post:
+        default = json.loads(await faostat_get_rankings("QCL", "5510", "15", "2023"))
+        csv = await faostat_get_rankings("QCL", "5510", "15", "2023", response_format="csv")
+    assert post.call_count == 1
+    assert default["rows"] == [["Kenya", 42]]
+    assert csv == "Area,Value\nKenya,42\n"
