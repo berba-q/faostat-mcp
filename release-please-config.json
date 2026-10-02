@@ -3,7 +3,12 @@
   "release-type": "python",
   "packages": {
     ".": {
-      "version-file": "faostat_mcp/__init__.py"
+      "version-file": "faostat_mcp/__init__.py",
+      "extra-files": [
+        { "type": "json", "path": "server.json",   "jsonpath": "$.version" },
+        { "type": "json", "path": "server.json",   "jsonpath": "$.packages[0].version" },
+        { "type": "yaml", "path": "smithery.yaml", "jsonpath": "$.version" }
+      ]
     }
   },
   "include-component-in-tag": false,

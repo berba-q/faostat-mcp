@@ -2,31 +2,34 @@ name: faostat-mcp
 description: >-
   Query the UN FAO FAOSTAT database — crop production, trade, food security,
   emissions, and more for 245 countries — from any MCP-compatible AI assistant.
-  21 tools covering every FAOSTAT endpoint with 3-tier caching (memory, disk,
+  23 tools covering every FAOSTAT endpoint with 3-tier caching (memory, disk,
   Redis) and automatic token management.
 categories:
   - Data & Analytics
   - Research & Science
 license: MIT
-version: "1.2.0"
+version: "1.2.2"
 
 startCommand:
   type: stdio
   configSchema:
     type: object
-    required: []
+    required:
+      - FAOSTAT_USERNAME
+      - FAOSTAT_PASSWORD
     properties:
       FAOSTAT_API_TOKEN:
         type: string
         description: >-
-          FAOSTAT JWT access token. Obtain from the FAOSTAT Developer Portal.
-          Optional if FAOSTAT_USERNAME + FAOSTAT_PASSWORD are provided, or if
-          you run faostat_setup from within your AI assistant after installing.
+          Optional. A FAOSTAT access token from the Developer Portal. Tokens
+          expire after 1 hour, so prefer FAOSTAT_USERNAME + FAOSTAT_PASSWORD,
+          which refresh automatically.
       FAOSTAT_USERNAME:
         type: string
         description: >-
-          FAOSTAT account email. Used for automatic token refresh.
-          Optional when FAOSTAT_API_TOKEN is set and unexpired.
+          FAOSTAT account email (free account at
+          https://www.fao.org/faostat/en/#developer-portal). Used to obtain
+          and refresh tokens automatically.
       FAOSTAT_PASSWORD:
         type: string
         description: >-
