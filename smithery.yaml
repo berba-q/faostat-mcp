@@ -8,8 +8,7 @@ categories:
   - Data & Analytics
   - Research & Science
 license: MIT
-version: "1.2.2"
-
+version: 1.3.0
 startCommand:
   type: stdio
   configSchema:
@@ -28,8 +27,8 @@ startCommand:
         type: string
         description: >-
           FAOSTAT account email (free account at
-          https://www.fao.org/faostat/en/#developer-portal). Used to obtain
-          and refresh tokens automatically.
+          https://www.fao.org/faostat/en/#developer-portal). Used to obtain and
+          refresh tokens automatically.
       FAOSTAT_PASSWORD:
         type: string
         description: >-
@@ -37,64 +36,64 @@ startCommand:
           token refresh.
       FAOSTAT_BASE_URL:
         type: string
-        default: "https://faostatservices.fao.org/api/v1"
+        default: https://faostatservices.fao.org/api/v1
         description: >-
           FAOSTAT API base URL. Do not change unless targeting a staging
           environment.
       FAOSTAT_DEFAULT_LANG:
         type: string
-        default: "en"
-        description: "Default language code for API responses."
+        default: en
+        description: Default language code for API responses.
       FAOSTAT_DISK_CACHE:
         type: string
-        default: "true"
+        default: 'true'
         description: >-
-          Enable SQLite disk cache for cross-session persistence (default: true).
-          Set to 'false' to disable.
+          Enable SQLite disk cache for cross-session persistence (default:
+          true). Set to 'false' to disable.
       DISK_CACHE_TTL:
         type: string
-        default: "86400"
+        default: '86400'
         description: >-
           Disk cache TTL in seconds. Default is 24 hours — appropriate since
           FAOSTAT data updates at most daily.
       DISK_CACHE_MAX_ENTRIES:
         type: string
-        default: "1000"
+        default: '1000'
         description: >-
           Maximum rows in the SQLite disk cache before LRU eviction kicks in.
           Prevents unbounded disk growth.
       MEM_CACHE_TTL:
         type: string
-        default: "1200"
-        description: "In-memory cache TTL in seconds (default: 20 minutes)."
+        default: '1200'
+        description: 'In-memory cache TTL in seconds (default: 20 minutes).'
       MAX_MEM_CACHE_SIZE:
         type: string
-        default: "256"
-        description: "Maximum entries in the in-memory cache."
+        default: '256'
+        description: Maximum entries in the in-memory cache.
       REDIS_HOST_IP_ADDRESS:
         type: string
-        default: "localhost"
+        default: localhost
         description: >-
           Redis server hostname or IP. Optional — enables distributed caching
           across sessions for high-volume deployments.
       REDIS_HOST_PORT_NUMBER:
         type: string
-        default: "6379"
-        description: "Redis server port."
+        default: '6379'
+        description: Redis server port.
       REDIS_DATABASE:
         type: string
-        default: "0"
-        description: "Redis logical database index."
+        default: '0'
+        description: Redis logical database index.
       REDIS_CACHE_TTL:
         type: string
-        default: "1800"
-        description: "Redis cache TTL in seconds."
+        default: '1800'
+        description: Redis cache TTL in seconds.
       REDIS_USERNAME:
         type: string
-        description: "Redis ACL username (only if Redis auth is enabled)."
+        description: Redis ACL username (only if Redis auth is enabled).
       REDIS_PASSWORD:
         type: string
-        description: "Redis ACL password (only if Redis auth is enabled)."
+        description: Redis ACL password (only if Redis auth is enabled).
   command:
-    - "uvx"
-    - "faostat-mcp"
+    - uvx
+    - faostat-mcp
